@@ -1,0 +1,23 @@
+{
+    "input_dirs": [
+        "/mnt/cho_duyet/THU_2",
+        "/mnt/cho_duyet/THU_3",
+        "/mnt/cho_duyet/THU_4",
+        "/mnt/cho_duyet/THU_5",
+        "/mnt/cho_duyet/THU_6",
+        "/mnt/cho_duyet/THU_7",
+        "/mnt/cho_duyet/CN"
+    ],
+    "output_dirs": [
+        "/mnt/mobile/THU_2",
+        "/mnt/mobile/THU_3",
+        "/mnt/mobile/THU_4",
+        "/mnt/mobile/THU_5",
+        "/mnt/mobile/THU_6",
+        "/mnt/mobile/THU_7",
+        "/mnt/mobile/CN"
+    ],
+    "log_file": "converted_files.log",
+    "time_interval": 600,
+    "days_old": 3
+}

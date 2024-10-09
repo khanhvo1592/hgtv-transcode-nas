@@ -1,0 +1,17 @@
+[Unit]
+Description=Transcode Service
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/python3 /home/khanhvo/hgtv-transcode/transcode_script.py
+WorkingDirectory=/home/khanhvo/hgtv-transcode
+StandardOutput=inherit
+StandardError=inherit
+Restart=always
+User=khanhvo
+Group=khanhvo
+
+[Install]
+WantedBy=multi-user.target
+
+

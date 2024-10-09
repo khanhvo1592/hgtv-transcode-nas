@@ -1,0 +1,293 @@
+## Sử dụng `rsync` để Đồng Bộ Hóa Input và Output từ Máy Chủ Khác
+
+Nếu các thư mục `input` và `output` nằm trên một máy chủ khác, bạn có thể sử dụng `rsync` để đồng bộ hóa dữ liệu giữa máy chủ từ xa và máy chủ địa phương. Dưới đây là các bước chi tiết để cấu hình dự án của bạn sử dụng `rsync` trong trường hợp này.
+
+### 1. Cập Nhật `config.json`
+
+Cập nhật `config.json` để trỏ đến các thư mục cục bộ trên máy chủ Linux của bạn. Các thư mục này sẽ được đồng bộ hóa với máy chủ từ xa thông qua `rsync`.
+
+```json:home/khanhvo/hgtv-transcode/config.json
+{
+    "input_dirs": [
+        "/home/khanhvo/hgtv-transcode/input/THU_2",
+        "/home/khanhvo/hgtv-transcode/input/THU_3",
+        "/home/khanhvo/hgtv-transcode/input/THU_4",
+        "/home/khanhvo/hgtv-transcode/input/THU_5",
+        "/home/khanhvo/hgtv-transcode/input/THU_6",
+        "/home/khanhvo/hgtv-transcode/input/THU_7",
+        "/home/khanhvo/hgtv-transcode/input/CN"
+    ],
+    "output_dirs": [
+        "/home/khanhvo/hgtv-transcode/output/MOBILE/THU_2",
+        "/home/khanhvo/hgtv-transcode/output/MOBILE/THU_3",
+        "/home/khanhvo/hgtv-transcode/output/MOBILE/THU_4",
+        "/home/khanhvo/hgtv-transcode/output/MOBILE/THU_5",
+        "/home/khanhvo/hgtv-transcode/output/MOBILE/THU_6",
+        "/home/khanhvo/hgtv-transcode/output/MOBILE/THU_7",
+        "/home/khanhvo/hgtv-transcode/output/MOBILE/CN"
+    ],
+    "log_file": "converted_files.log",
+    "time_interval": 3000,
+    "days_old": 3
+}
+```
+
+**Lưu ý:**
+- Tạo các thư mục `input` và `output` cục bộ trên máy chủ Linux của bạn:
+  ```bash
+  mkdir -p /home/khanhvo/hgtv-transcode/input/{THU_2,THU_3,THU_4,THU_5,THU_6,THU_7,CN}
+  mkdir -p /home/khanhvo/hgtv-transcode/output/MOBILE/{THU_2,THU_3,THU_4,THU_5,THU_6,THU_7,CN}
+  ```
+
+### 2. Thiết Lập `rsync` để Đồng Bộ Hóa Thư Mục
+
+Bạn sẽ thiết lập `rsync` để đồng bộ hóa các thư mục `input` và `output` giữa máy chủ từ xa và máy chủ cục bộ.
+
+#### a. Cài Đặt `rsync`
+
+Trên cả máy chủ từ xa và máy chủ cục bộ, đảm bảo rằng `rsync` đã được cài đặt:
+```bash
+sudo apt update
+sudo apt install rsync
+```
+
+#### b. Thiết Lập SSH Key (Nếu Sử Dụng `rsync` qua SSH)
+
+Để tự động hóa quá trình đồng bộ hóa mà không cần nhập mật khẩu mỗi lần, thiết lập SSH key giữa máy chủ cục bộ và máy chủ từ xa.
+
+1. **Tạo SSH Key trên Máy Chủ Cục Bộ:**
+   ```bash
+   ssh-keygen -t rsa -b 4096 -C "your_email@example.com"
+   ```
+   - Nhấn `Enter` để chấp nhận vị trí lưu mặc định.
+   - Không đặt mật khẩu nếu bạn muốn tự động hóa hoàn toàn.
+
+2. **Sao Chép SSH Key đến Máy Chủ Từ Xa:**
+   ```bash
+   ssh-copy-id user@192.168.150.205
+   ```
+   - Thay `user` bằng tên người dùng trên máy chủ từ xa.
+
+#### c. Tạo Script Đồng Bộ `rsync`
+
+Tạo một script để đồng bộ hóa các thư mục `input` và `output` từ máy chủ từ xa đến máy chủ cục bộ và ngược lại.
+
+```bash
+nano /home/khanhvo/hgtv-transcode/sync.sh
+```
+
+Thêm nội dung sau vào `sync.sh`:
+
+```bash
+#!/bin/bash
+
+REMOTE_USER="user" # Thay bằng tên người dùng trên máy chủ từ xa
+REMOTE_HOST="192.168.150.205"
+REMOTE_INPUT_BASE_DIR="/volume2/TRUYEN_HINH/CHO_DUYET"
+REMOTE_OUTPUT_BASE_DIR="/volume2/MOBILE"
+
+LOCAL_INPUT_BASE_DIR="/home/khanhvo/hgtv-transcode/input"
+LOCAL_OUTPUT_BASE_DIR="/home/khanhvo/hgtv-transcode/output/MOBILE"
+
+# Đồng bộ các thư mục input từ máy chủ từ xa về máy chủ cục bộ
+for dir in THU_2 THU_3 THU_4 THU_5 THU_6 THU_7 CN
+do
+    rsync -avz --delete ${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_INPUT_BASE_DIR}/${dir}/ ${LOCAL_INPUT_BASE_DIR}/${dir}/
+done
+
+# Đồng bộ các thư mục output từ máy chủ cục bộ về máy chủ từ xa
+for dir in THU_2 THU_3 THU_4 THU_5 THU_6 THU_7 CN
+do
+    rsync -avz --delete ${LOCAL_OUTPUT_BASE_DIR}/${dir}/ ${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_OUTPUT_BASE_DIR}/${dir}/
+done
+```
+
+**Giải thích:**
+- `-a`: Chế độ archive, bảo toàn thuộc tính file.
+- `-v`: Hiển thị thông tin chi tiết.
+- `-z`: Nén dữ liệu trong quá trình truyền tải.
+- `--delete`: Xóa các file trên máy đích nếu chúng đã bị xóa trên máy nguồn.
+
+#### d. Cấp Quyền Thực Thi Cho Script
+
+```bash
+chmod +x /home/khanhvo/hgtv-transcode/sync.sh
+```
+
+#### e. Thiết Lập Cron Job để Tự Động Đồng Bộ Hóa
+
+Để đồng bộ hóa định kỳ, sử dụng `cron`.
+
+Mở cron tab:
+```bash
+crontab -e
+```
+
+Thêm dòng sau để chạy `rsync` mỗi 5 phút:
+```cron
+*/5 * * * * /home/khanhvo/hgtv-transcode/sync.sh >> /home/khanhvo/hgtv-transcode/sync.log 2>&1
+```
+
+**Giải thích:**
+- `*/5 * * * *`: Chạy mỗi 5 phút.
+- Ghi nhật ký đầu ra vào `sync.log` để kiểm tra.
+
+### 3. Chỉnh Sửa `transcode_script.py`
+
+Với cấu hình `config.json` đã trỏ đến các thư mục cục bộ, bạn không cần thay đổi nhiều trong `transcode_script.py`. Tuy nhiên, để đảm bảo rằng dữ liệu đã được đồng bộ trước khi xử lý, bạn có thể tích hợp gọi đến script `rsync`.
+
+```python:home/khanhvo/hgtv-transcode/transcode_script.py
+import os
+import time
+import subprocess
+import json
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import logging
+
+# Thiết lập logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# Đọc cấu hình từ file JSON
+with open('config.json', 'r') as f:
+    config = json.load(f)
+
+input_dirs = config['input_dirs']
+output_dirs = config['output_dirs']
+log_file = config['log_file']
+time_interval = config['time_interval']
+days_old = config['days_old']
+
+def load_converted_files(log_file):
+    if os.path.exists(log_file):
+        with open(log_file, 'r') as f:
+            converted_files = f.read().splitlines()
+    else:
+        converted_files = []
+    return set(converted_files)
+
+def save_converted_file(log_file, file_name):
+    with open(log_file, 'a', encoding='utf-8') as f:
+        f.write(file_name + '\n')
+
+def delete_old_files(directory, days_old):
+    now = time.time()
+    cutoff = now - (days_old * 86400)  # 86400 seconds in a day
+    
+    for filename in os.listdir(directory):
+        file_path = os.path.join(directory, filename)
+        if os.path.isfile(file_path):
+            file_creation_time = os.path.getctime(file_path)
+            if file_creation_time < cutoff:
+                os.remove(file_path)
+                logging.info(f"Deleted {file_path}")
+
+def convert_video(input_file, output_file, log_file):
+    command = [
+        'ffmpeg', '-i', input_file, 
+        '-vf', 'scale=1280:720,drawtext=fontfile=font.ttf:text=\'%{pts\\:hms}\':fontcolor=white:fontsize=24:box=1:boxcolor=black@0.5:boxborderw=5:x=10:y=10', 
+        '-c:v', 'libx264', '-b:v', '1M', 
+        '-c:a', 'aac', '-b:a', '128k', 
+        output_file
+    ]
+    result = subprocess.run(command, capture_output=True, text=True)
+    
+    if result.returncode == 0:
+        save_converted_file(log_file, os.path.basename(input_file))
+        logging.info(f"Converted: {input_file}")
+    else:
+        logging.error(f"Error converting {input_file}: {result.stderr}")
+
+def process_directory(input_dir, output_dir, log_file, converted_files):
+    if not os.path.exists(input_dir):
+        logging.error(f"Input directory does not exist: {input_dir}")
+        return  # Thoát nếu thư mục không tồn tại
+
+    tasks = []
+    with ThreadPoolExecutor(max_workers=os.cpu_count()) as executor:
+        for file_name in os.listdir(input_dir):
+            if file_name.endswith('.mpg'):
+                input_file = os.path.join(input_dir, file_name)
+                output_file = os.path.join(output_dir, os.path.splitext(file_name)[0] + '.mp4')
+                
+                if not os.path.exists(output_file) and file_name not in converted_files:
+                    task = executor.submit(convert_video, input_file, output_file, log_file)
+                    tasks.append(task)
+        
+        for future in as_completed(tasks):
+            future.result()  # Đảm bảo bất kỳ ngoại lệ nào cũng được nâng lên
+
+# Đường dẫn tới script rsync
+SYNC_SCRIPT = '/home/khanhvo/hgtv-transcode/sync.sh'
+
+converted_files = load_converted_files(log_file)
+
+while True:
+    # Đồng bộ trước khi xử lý
+    subprocess.run(['bash', SYNC_SCRIPT], check=True)
+    
+    for input_dir, output_dir in zip(input_dirs, output_dirs):
+        process_directory(input_dir, output_dir, log_file, converted_files)
+        delete_old_files(output_dir, days_old)
+    
+    time.sleep(time_interval)
+```
+
+**Giải thích Thay Đổi:**
+- Thêm biến `SYNC_SCRIPT` chứa đường dẫn tới script `rsync`.
+- Trước khi bắt đầu vòng lặp xử lý, script sẽ gọi `sync.sh` để đồng bộ các thư mục.
+
+### 4. Chạy Dự Án trên Linux Server
+
+#### a. Đảm Bảo Các Thư Mục Đã Được Đồng Bộ
+
+Trước khi chạy script, hãy đảm bảo rằng các thư mục cục bộ đã được đồng bộ hóa từ máy chủ từ xa bằng cách chạy thủ công script `sync.sh`:
+
+```bash
+bash /home/khanhvo/hgtv-transcode/sync.sh
+```
+
+#### b. Chạy `transcode_script.py`
+
+Chạy script Python để bắt đầu quá trình chuyển đổi video:
+
+```bash
+python3 /home/khanhvo/hgtv-transcode/transcode_script.py
+```
+
+Bạn có thể chạy script này dưới dạng một dịch vụ hoặc sử dụng `nohup` để đảm bảo script tiếp tục chạy ngay cả khi bạn đóng terminal:
+
+```bash
+nohup python3 /home/khanhvo/hgtv-transcode/transcode_script.py > transcode.log 2>&1 &
+```
+
+### 5. Kiểm Tra và Giám Sát
+
+- **Kiểm Tra Nhật Ký Đồng Bộ:**
+  - Xem nội dung `sync.log` để đảm bảo rằng `rsync` hoạt động đúng:
+    ```bash
+    tail -f /home/khanhvo/hgtv-transcode/sync.log
+    ```
+
+- **Kiểm Tra Nhật Ký Chuyển Đổi:**
+  - Xem nội dung `converted_files.log` và `transcode.log` để theo dõi quá trình chuyển đổi video.
+
+- **Kiểm Tra Việc Xóa File Cũ:**
+  - Đảm bảo rằng các file cũ được xóa sau `days_old` như mong muốn.
+
+### 6. Lợi Ích của Việc Sử Dụng `rsync`
+
+- **Hiệu Suất Tốt:** `rsync` chỉ đồng bộ hóa các file mới hoặc thay đổi, tiết kiệm băng thông và thời gian.
+- **An Toàn và Tin Cậy:** `rsync` kiểm tra tính toàn vẹn của các file được truyền tải.
+- **Dễ Dàng Tự Động Hóa:** Với `cron` và SSH keys, bạn có thể tự động hóa quá trình đồng bộ hóa một cách linh hoạt.
+
+### 7. Kết Luận
+
+Bằng cách sử dụng `rsync`, bạn có thể dễ dàng đồng bộ hóa các thư mục `input` và `output` giữa máy chủ từ xa và máy chủ Linux của mình. Điều này giúp đơn giản hóa cấu hình và tăng tính linh hoạt trong việc quản lý dữ liệu. Đảm bảo rằng bạn đã thiết lập đúng quyền truy cập và kiểm tra kỹ lưỡng các bước đồng bộ hóa để đảm bảo quá trình chuyển đổi diễn ra suôn sẻ.
+
+Nếu bạn gặp bất kỳ vấn đề nào trong quá trình thiết lập, hãy kiểm tra lại các log file hoặc liên hệ để được hỗ trợ thêm.
+
+
+
+##connect smb server
+     sudo mount -t cifs //192.168.150.205/mobile /mnt/mobile -o credentials=/etc/smbcredentials,uid=1000,gid=1000,file_mode=0775,dir_mode=0775,vers=2.0
+     sudo mount -t cifs //192.168.150.205/truyen_hinh/cho_duyet /mnt/cho_duyet -o credentials=/etc/smbcredentials,uid=1000,gid=1000,file_mode=0775,dir_mode=0775,vers=2.0
